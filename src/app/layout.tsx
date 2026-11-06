@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Host_Grotesk } from 'next/font/google';
 import type { ReactNode } from 'react';
 
 import { DevBanner } from '@/components/dev-banner';
@@ -24,12 +25,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // Fonts (design.md §1): `const heading = <Face>({ subsets: ['latin'], variable: '--font-heading' })` from
 // `next/font/google` (and `--font-body`), then both `.variable` classes in the <html> className below.
-const fonts = '';
+// Una sola neo-grotesca (grilla suiza): Host Grotesk en todos los pesos; los títulos la usan en negrita y apretada.
+const body = Host_Grotesk({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
+const fonts = body.variable;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html className={fonts} lang="en">
-      <body className="flex min-h-dvh flex-col bg-white font-sans text-zinc-900 antialiased">
+    <html className={fonts} lang="es">
+      <body className="flex min-h-dvh flex-col bg-paper font-sans text-stone-900 antialiased">
         <SiteHeader />
         <div className="flex-1">{children}</div>
         <SiteFooter />
