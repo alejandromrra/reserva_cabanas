@@ -7,11 +7,13 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { reservas } from '@/db/schema';
 import {
-  ALIAS_PAGO, cotizar, fechaValida, hoyAR, noches, pesos, puedeCancelar, soloDigitos, TIPOS, type Tipo,
+  ALIAS_PAGO, cotizar, EXTRAS_TOTAL, fechaValida, hoyAR, noches, pesos, puedeCancelar, soloDigitos, sumarDias, TIPOS, type Tipo,
 } from '@/lib/cabanas';
 import { leerOcupacion, stockExtra, unidadLibre } from '@/lib/disponibilidad';
 import { loadPage } from '@/lib/load-page';
-import { claveCorrecta, cerrarPanel, esPanel, iniciarPanel } from '@/lib/panel';
+import {
+  claveCorrecta, cerrarPanel, esPanel, iniciarPanel, limpiarFallos, panelBloqueado, registrarFallo,
+} from '@/lib/panel';
 
 type Consulta = { llegada: string; salida: string; adultos: number; chicos: number; bebes: number };
 const entero = (n: unknown, max = 20) => (Number.isInteger(n) && (n as number) >= 0 && (n as number) <= max ? (n as number) : null);
@@ -36,13 +38,24 @@ export async function consultar(c: Consulta) {
   const v = validar(c);
   if ('error' in v) return { ok: false as const, error: v.error };
   const o = await leerOcupacion(c.llegada, c.salida);
-  const personas = v.adultos + v.chicos;
+  const personas = v.adultos + v.chicos; // los bebés no cuentan como plaza
+  const cabe = (t: Tipo) => personas <= TIPOS[t].cap;
+  const hayLugar = (t: Tipo) => !!unidadLibre(o, t, c.llegada, c.salida);
+  const otro = (t: Tipo): Tipo => (t === 'Familiar' ? 'Compacta' : 'Familiar');
   const tipos = (Object.keys(TIPOS) as Tipo[]).map((tipo) => {
     const q = cotizar(tipo, c.llegada, c.salida);
+    const qOtro = cotizar(otro(tipo), c.llegada, c.salida);
     let motivo: string | null = null;
-    if (personas > TIPOS[tipo].cap) motivo = `No entra: tiene lugar para ${TIPOS[tipo].cap} personas y son ${personas}`;
-    else if (q.noches < q.minimo) motivo = `Mínimo ${q.minimo} noches en ${q.temporada.toLowerCase()}`;
-    else if (!unidadLibre(o, tipo, c.llegada, c.salida)) motivo = 'Sin lugar en esas fechas';
+    // Cuando algo no se puede: el porqué y, si existe, la otra opción.
+    if (!cabe(tipo)) {
+      motivo = `No entra: tiene lugar para ${TIPOS[tipo].cap} personas y son ${personas}.${cabe(otro(tipo)) ? ` Les entra la ${otro(tipo)}.` : ''}`;
+    } else if (q.noches < q.minimo) {
+      const s = sumarDias(c.llegada, q.minimo);
+      motivo = `Mínimo ${q.minimo} noches en ${q.temporada.toLowerCase()}. Probá con salida el ${s.slice(8)}/${s.slice(5, 7)}.`;
+    } else if (!hayLugar(tipo)) {
+      const sirve = cabe(otro(tipo)) && qOtro.noches >= qOtro.minimo && hayLugar(otro(tipo));
+      motivo = `Sin lugar en esas fechas.${sirve ? ` La ${otro(tipo)} sí tiene.` : ''}`;
+    }
     return { tipo, cap: TIPOS[tipo].cap, detalle: TIPOS[tipo].detalle, ...q, precioTotalTexto: pesos(q.total), motivo };
   });
   const cuna = stockExtra(o, 'cuna', c.llegada, c.salida);
@@ -80,7 +93,18 @@ export async function reservar(c: Consulta & { tipo: Tipo; nombre: string; celul
   if (cuna && stockExtra(o, 'cuna', c.llegada, c.salida) < 1) return { ok: false as const, error: 'La cuna se agotó para esas fechas.' };
   if (banera && stockExtra(o, 'banera', c.llegada, c.salida) < 1) return { ok: false as const, error: 'La bañera se agotó para esas fechas.' };
 
-  // Insert protegido: solo entra si la unidad sigue libre todas las noches (dos reservas nunca comparten noche).
+  // Insert protegido: solo entra si la unidad sigue libre todas las noches (dos reservas nunca comparten noche)
+  // y, si pide cuna o bañera, si en ninguna noche de la estadía ya están todas tomadas. Todo en la misma sentencia,
+  // así dos pedidos a la vez no pueden llevarse el último extra.
+  const sinStock = (col: 'cuna' | 'banera', usa: boolean) =>
+    usa
+      ? sql`AND NOT EXISTS (
+          SELECT 1 FROM (
+            SELECT ${c.llegada} AS d
+            UNION SELECT llegada FROM reservas WHERE ${sql.raw(col)} = 1 AND estado != 'Cancelada' AND llegada > ${c.llegada} AND llegada < ${c.salida}
+          ) p
+          WHERE (SELECT COUNT(*) FROM reservas WHERE ${sql.raw(col)} = 1 AND estado != 'Cancelada' AND llegada <= p.d AND salida > p.d) >= ${EXTRAS_TOTAL[col]})`
+      : sql``;
   const candidatas = o.unidades.filter(
     (u) => u.tipo === c.tipo && !o.activas.some((r) => r.unidadId === u.id && r.llegada < c.salida && r.salida > c.llegada),
   );
@@ -89,7 +113,8 @@ export async function reservar(c: Consulta & { tipo: Tipo; nombre: string; celul
     const [res] = await db.batch([
       db.run(sql`INSERT INTO reservas (id, codigo, nombre, celular, tipo, unidad_id, llegada, salida, adultos, chicos, bebes, cuna, banera, precio, estado, creada_en)
         SELECT ${crypto.randomUUID()}, ${codigo}, ${nombre}, ${celular}, ${c.tipo}, ${u.id}, ${c.llegada}, ${c.salida}, ${v.adultos}, ${v.chicos}, ${v.bebes}, ${cuna ? 1 : 0}, ${banera ? 1 : 0}, ${q.total}, 'Pendiente', ${Date.now()}
-        WHERE NOT EXISTS (SELECT 1 FROM reservas WHERE unidad_id = ${u.id} AND estado != 'Cancelada' AND llegada < ${c.salida} AND salida > ${c.llegada})`),
+        WHERE NOT EXISTS (SELECT 1 FROM reservas WHERE unidad_id = ${u.id} AND estado != 'Cancelada' AND llegada < ${c.salida} AND salida > ${c.llegada})
+        ${sinStock('cuna', cuna)} ${sinStock('banera', banera)}`),
     ]);
     const cambios = (res as unknown as { meta?: { changes?: number } }).meta?.changes ?? 0;
     if (cambios > 0) {
@@ -98,6 +123,10 @@ export async function reservar(c: Consulta & { tipo: Tipo; nombre: string; celul
       return { ok: true as const, codigo, alias: ALIAS_PAGO, precio: q.total, noches: q.noches };
     }
   }
+  // Nadie entró: ¿fue un extra que se agotó justo ahora, o la unidad?
+  const o2 = await leerOcupacion(c.llegada, c.salida);
+  if (cuna && stockExtra(o2, 'cuna', c.llegada, c.salida) < 1) return { ok: false as const, error: 'La cuna se agotó para esas fechas.' };
+  if (banera && stockExtra(o2, 'banera', c.llegada, c.salida) < 1) return { ok: false as const, error: 'La bañera se agotó para esas fechas.' };
   return { ok: false as const, error: 'Sin lugar en esas fechas' };
 }
 
@@ -140,9 +169,14 @@ export async function cancelarMiReserva(codigo: string, celular: string) {
 
 // ---- Panel de la dueña ----
 export async function entrarPanel(clave: string) {
-  if (!claveCorrecta(String(clave ?? '').trim())) return { ok: false as const, error: 'Clave incorrecta.' };
+  if (await panelBloqueado()) return { ok: false as const, error: 'Demasiados intentos. Probá de nuevo en 15 minutos.' };
+  if (!claveCorrecta(String(clave ?? '').trim())) {
+    await registrarFallo();
+    return { ok: false as const, error: 'Clave incorrecta.' };
+  }
+  await limpiarFallos();
+  // Al setear la cookie, Next ya devuelve la página actualizada en la misma respuesta: no hace falta revalidar.
   await iniciarPanel();
-  revalidatePath('/admin');
   return { ok: true as const };
 }
 export async function salirPanel() {
