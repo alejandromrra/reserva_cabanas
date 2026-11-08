@@ -1,13 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { entrarPanel } from '@/app/actions';
 import { Aviso, botonPrimario, campo, etiqueta } from '@/components/estilos';
 
 export function PanelLogin() {
-  const router = useRouter();
   const [clave, setClave] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -18,7 +16,7 @@ export function PanelLogin() {
     setError(null);
     try {
       const r = await entrarPanel(clave);
-      if (r.ok) router.refresh();
+      if (r.ok) { window.location.reload(); return; }
       else setError(r.error ?? 'No pudimos entrar.');
     } catch {
       setError('No pudimos entrar. Probá de nuevo en unos segundos.');

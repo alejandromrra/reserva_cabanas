@@ -11,7 +11,7 @@ export function claveCorrecta(intento: string) {
   return timingSafeEqual(a, b);
 }
 export async function iniciarPanel() {
-  (await cookies()).set('panel', token(), { httpOnly: true, sameSite: 'lax', secure: true, path: '/', maxAge: 60 * 60 * 12 });
+  (await cookies()).set('panel', token(), { httpOnly: true, sameSite: 'none', secure: true, partitioned: true, path: '/', maxAge: 60 * 60 * 12 });
 }
 export async function cerrarPanel() {
   (await cookies()).delete('panel');
