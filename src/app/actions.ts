@@ -140,7 +140,7 @@ export async function cancelarMiReserva(codigo: string, celular: string) {
 
 // ---- Panel de la dueña ----
 export async function entrarPanel(clave: string) {
-  if (!claveCorrecta(String(clave ?? ''))) return { ok: false as const, error: 'Clave incorrecta.' };
+  if (!claveCorrecta(String(clave ?? '').trim())) return { ok: false as const, error: 'Clave incorrecta.' };
   await iniciarPanel();
   revalidatePath('/admin');
   return { ok: true as const };
