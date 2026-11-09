@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
 import { SiteFooter } from '@/components/site-footer';
@@ -15,7 +15,7 @@ function AlInicio() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AlInicio />
       <SiteHeader />
       <div className="flex-1">
@@ -27,6 +27,6 @@ export default function App() {
         </Routes>
       </div>
       <SiteFooter />
-    </BrowserRouter>
+    </HashRouter>
   );
 }

@@ -4,7 +4,7 @@ Seis cabañas en la sierra (F1–F3 **Familiares**, hasta 6 personas; C1–C3 **
 
 - **Stack:** React 19 + Vite + Tailwind CSS 4 + React Router. Sin servidor ni base de datos: **los datos se guardan en `localStorage`**.
 - **Previsualización:** _pendiente — pegá acá la URL cuando publiques la app (ver «Publicar»)._
-- **Pantallas:** reservar `/` · consultar con código y celular `/mi-reserva` · panel de la dueña `/admin`.
+- **Pantallas:** reservar `/` · consultar con código y celular `#/mi-reserva` · panel de la dueña `#/admin`.
 
 > **Importante:** como los datos viven en `localStorage`, **solo se ven en el mismo navegador** (y en el mismo dispositivo) donde se hicieron. Una familia que reserva desde su celular no aparece en el panel abierto en otra computadora. Es lo que pide el encargo; para compartir reservas entre dispositivos haría falta un servidor.
 
@@ -78,7 +78,11 @@ Si no definís la variable, se usa `sierra2026`; también podés cambiar ese val
 
 ## Publicar
 
-Es un sitio estático: `npm run build` genera `dist/` y se sirve en cualquier hosting estático. Como usa rutas como `/mi-reserva` y `/admin`, el hosting tiene que devolver `index.html` para cualquier ruta (en Netlify, Vercel y Cloudflare Pages se activa con una regla de «SPA fallback»). Después de publicar, pegá la URL arriba, en «Previsualización».
+Es un sitio estático: `npm run build` genera `dist/` (nunca se publica el código fuente). Las rutas usan `#` (`/#/mi-reserva`, `/#/admin`) y los archivos se piden con rutas relativas, así que funciona en cualquier hosting y en subcarpetas, sin reglas de redirección.
+
+**GitHub Pages:** el workflow `.github/workflows/deploy.yml` corre las pruebas, construye y publica en cada push a `main`. Solo hay que poner Settings → Pages → Source en **GitHub Actions**. La URL queda `https://<usuario>.github.io/reserva_cabanas/`; pegala arriba, en «Previsualización».
+
+Para cambiar la clave del panel en ese despliegue, definí `VITE_PANEL_CLAVE` como variable del repositorio y pasala en el paso `npm run build` del workflow.
 
 ## Estructura
 
