@@ -1,21 +1,17 @@
-'use client';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
-import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-
-import { consultar, reservar } from '@/app/actions';
 import { fechaLegible, hoyArgentina, pesos, plural, sumarDias } from '@/components/formato';
 import { Glifo, Sierra } from '@/components/ilustraciones';
 import { Aviso, botonPrimario, botonSecundario, campo, contenedor, etiqueta } from '@/components/estilos';
+import { EN_COMUN, type Tipo } from '@/lib/cabanas';
+import { comparar, type Comparacion, reservar } from '@/lib/servicio';
+import { useReservas } from '@/lib/store';
 
-type Consulta = Awaited<ReturnType<typeof consultar>>;
-type Ok = Extract<Consulta, { ok: true }>;
-type TipoFila = Ok['tipos'][number];
-type Tipo = TipoFila['tipo'];
+type TipoFila = Comparacion['tipos'][number];
 type Hecha = { codigo: string; alias: string; precio: number; noches: number; tipo: Tipo; llegada: string; salida: string };
 
 const opciones = (desde: number, hasta: number) => Array.from({ length: hasta - desde + 1 }, (_, i) => desde + i);
-const EN_COMUN = 'Cochera, galería y parrilla';
 
 function Selector(props: { id: string; label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
@@ -61,15 +57,29 @@ export function Reservador() {
   const [bebes, setBebes] = useState(0);
   const hoy = hoyArgentina();
 
-  const [res, setRes] = useState<Ok | null>(null);
-  const [errorConsulta, setErrorConsulta] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [refresco, setRefresco] = useState(0);
-  const secuencia = useRef(0);
+  const reservas = useReservas();
+  // Las tarifas y el cupo se calculan al instante con las reservas de este navegador.
+  const cons = useMemo(
+    () => comparar({ llegada, salida, adultos, chicos, bebes }, reservas),
+    [llegada, salida, adultos, chicos, bebes, reservas],
+  );
+  const res = cons.ok ? cons : null;
+  const errorConsulta = cons.ok ? null : cons.error;
 
-  const [tipoSel, setTipoSel] = useState<Tipo | null>(null);
-  const [cuna, setCuna] = useState(false);
-  const [banera, setBanera] = useState(false);
+  const [tipoSelManual, setTipoSel] = useState<Tipo | null>(null);
+  const [cunaQuiere, setCuna] = useState(false);
+  const [baneraQuiere, setBanera] = useState(false);
+
+  // La cabaña elegida se mantiene mientras siga disponible; si no, se propone la más barata que sirva.
+  const tipoSel = useMemo<Tipo | null>(() => {
+    if (!res) return null;
+    const libres = res.tipos.filter((x) => !x.motivo);
+    if (tipoSelManual && libres.some((x) => x.tipo === tipoSelManual)) return tipoSelManual;
+    return libres.length ? libres.reduce((a, b) => (b.total < a.total ? b : a)).tipo : null;
+  }, [res, tipoSelManual]);
+  // Cuna y bañera solo cuentan si hay bebés y queda stock para todas las noches.
+  const cuna = cunaQuiere && !!res?.extras.hayBebes && res.extras.cuna.stock >= 1;
+  const banera = baneraQuiere && !!res?.extras.hayBebes && res.extras.banera.stock >= 1;
 
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState('');
@@ -80,43 +90,6 @@ export function Reservador() {
   const [copiado, setCopiado] = useState(false);
   const dialogo = useRef<HTMLDialogElement>(null);
 
-  // Consulta con espera de 400 ms; una respuesta vieja nunca pisa a una nueva.
-  useEffect(() => {
-    if (!llegada || !salida) {
-      setErrorConsulta('Elegí la fecha de llegada y la de salida.');
-      setCargando(false);
-      return;
-    }
-    setCargando(true);
-    const id = ++secuencia.current;
-    const t = setTimeout(async () => {
-      try {
-        const r = await consultar({ llegada, salida, adultos, chicos, bebes });
-        if (id !== secuencia.current) return;
-        if (!r.ok) {
-          setErrorConsulta(r.error ?? 'No pudimos consultar las tarifas.');
-          setRes(null);
-          setTipoSel(null);
-        } else {
-          setErrorConsulta(null);
-          setRes(r);
-          setTipoSel((actual) => {
-            const libres = r.tipos.filter((x) => !x.motivo);
-            if (actual && libres.some((x) => x.tipo === actual)) return actual;
-            return libres.length ? libres.reduce((a, b) => (b.total < a.total ? b : a)).tipo : null;
-          });
-          if (!r.extras.hayBebes || r.extras.cuna.stock < 1) setCuna(false);
-          if (!r.extras.hayBebes || r.extras.banera.stock < 1) setBanera(false);
-        }
-      } catch {
-        if (id !== secuencia.current) return;
-        setErrorConsulta('No pudimos consultar las tarifas. Probá de nuevo en unos segundos.');
-      }
-      if (id === secuencia.current) setCargando(false);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [llegada, salida, adultos, chicos, bebes, refresco]);
-
   useEffect(() => {
     const d = dialogo.current;
     if (!d) return;
@@ -125,7 +98,7 @@ export function Reservador() {
   }, [abierto]);
 
   const elegida = res?.tipos.find((t) => t.tipo === tipoSel) ?? null;
-  const puedeReservar = !!elegida && !cargando && !errorConsulta;
+  const puedeReservar = !!elegida && !errorConsulta;
 
   function cambiarLlegada(v: string) {
     setLlegada(v);
@@ -138,17 +111,13 @@ export function Reservador() {
     setEnviando(true);
     setErrorReserva(null);
     try {
-      const r = await reservar({
-        llegada, salida, adultos, chicos, bebes, tipo: elegida.tipo, nombre, celular,
-        cuna: cuna && !!res?.extras.hayBebes, banera: banera && !!res?.extras.hayBebes,
-      });
+      const r = await reservar({ llegada, salida, adultos, chicos, bebes, tipo: elegida.tipo, nombre, celular, cuna, banera });
       if (r.ok) {
         setHecha({ codigo: r.codigo, alias: r.alias, precio: r.precio, noches: r.noches, tipo: elegida.tipo, llegada, salida });
         setAbierto(false);
         window.scrollTo({ top: 0 });
       } else {
-        setErrorReserva(r.error ?? 'No pudimos reservar.');
-        setRefresco((n) => n + 1);
+        setErrorReserva(r.error);
       }
     } catch {
       setErrorReserva('No pudimos enviar la reserva. Probá de nuevo en unos segundos.');
@@ -188,7 +157,7 @@ export function Reservador() {
             </p>
             <p className="mt-4 max-w-md text-base leading-7 text-stone-800">
               Guardá el código: con tu celular lo usás en{' '}
-              <Link className="font-semibold text-brand underline underline-offset-4" href="/mi-reserva">
+              <Link className="font-semibold text-brand underline underline-offset-4" to="/mi-reserva">
                 Mi reserva
               </Link>{' '}
               para ver el estado o cancelar.
@@ -232,7 +201,6 @@ export function Reservador() {
                 setHecha(null);
                 setNombre('');
                 setCelular('');
-                setRefresco((n) => n + 1);
               }}
               type="button"
             >
@@ -304,13 +272,11 @@ export function Reservador() {
               <svg aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
             <p className="mt-2 min-h-5 text-sm leading-5 text-stone-800" aria-live="polite">
-              {cargando
-                ? 'Calculando tarifas…'
-                : elegida
-                  ? `${elegida.tipo} · ${elegida.precioTotalTexto} en total`
-                  : res && !errorConsulta
-                    ? 'Ninguna cabaña disponible con estos datos: mirá los motivos abajo.'
-                    : ''}
+              {elegida
+                ? `${elegida.tipo} · ${elegida.precioTotalTexto} en total`
+                : res
+                  ? 'Ninguna cabaña disponible con estos datos: mirá los motivos abajo.'
+                  : ''}
             </p>
           </form>
           <p className="mt-4 hidden max-w-sm text-sm leading-6 text-stone-800 lg:block">
@@ -334,10 +300,10 @@ export function Reservador() {
             </p>
           </div>
 
-          <div aria-busy={cargando} className="mt-8 grid gap-4 md:grid-cols-2 md:gap-6">
+          <div className="mt-8 grid gap-4 md:grid-cols-2 md:gap-6">
             {!res ? (
               [0, 1].map((i) => (
-                <div className={`border border-stone-300 bg-white p-6 ${cargando ? 'animate-pulse' : ''}`} key={i}>
+                <div className="border border-stone-300 bg-white p-6" key={i}>
                   <div className="h-8 w-1/3 rounded-sm bg-stone-200" />
                   <div className="mt-6 h-20 w-1/4 rounded-sm bg-stone-200" />
                   <div className="mt-6 h-4 w-3/4 rounded-sm bg-stone-200" />
@@ -346,11 +312,11 @@ export function Reservador() {
               ))
             ) : (
               res.tipos.map((t) => (
-                <TarjetaTipo cargando={cargando} elegida={tipoSel === t.tipo} key={t.tipo} onElegir={() => setTipoSel(t.tipo)} t={t} />
+                <TarjetaTipo elegida={tipoSel === t.tipo} key={t.tipo} onElegir={() => setTipoSel(t.tipo)} t={t} />
               ))
             )}
           </div>
-          {!res && !cargando && errorConsulta && (
+          {!res && errorConsulta && (
             <p className="mt-4 text-sm text-stone-800">Corregí los datos de arriba para ver las tarifas.</p>
           )}
 
@@ -474,7 +440,7 @@ export function Reservador() {
   );
 }
 
-function TarjetaTipo({ t, elegida, cargando, onElegir }: { t: TipoFila; elegida: boolean; cargando: boolean; onElegir: () => void }) {
+function TarjetaTipo({ t, elegida, onElegir }: { t: TipoFila; elegida: boolean; onElegir: () => void }) {
   const bloqueada = !!t.motivo;
   return (
     <label
@@ -482,7 +448,7 @@ function TarjetaTipo({ t, elegida, cargando, onElegir }: { t: TipoFila; elegida:
         bloqueada
           ? 'cursor-not-allowed border-stone-300 bg-stone-100'
           : 'cursor-pointer border-stone-900 bg-white hover:bg-sierra-50 has-checked:border-brand has-checked:bg-sierra-50 has-checked:shadow-[inset_0_0_0_2px_var(--color-brand)]'
-      } ${cargando ? 'opacity-70' : ''}`}
+      }`}
     >
       <input checked={elegida && !bloqueada} className="peer sr-only" disabled={bloqueada} name="tipo" onChange={onElegir} type="radio" value={t.tipo} />
       <div className="flex items-start justify-between gap-3">

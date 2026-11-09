@@ -1,32 +1,39 @@
 # Cabañas del Sendero — sistema de reservas
 
-Seis cabañas en la sierra (F1–F3 Familiares de hasta 6 personas, C1–C3 Compactas de hasta 4). La familia compara los dos tipos lado a lado, ve cuál le entra según cuántos son, pide cuna o bañera para el bebé y reserva. La app calcula el precio por temporada y controla que la cuna y la bañera (que son pocas) no se entreguen de más. La dueña ve y gestiona todo desde `/admin`.
+Seis cabañas en la sierra (F1–F3 **Familiares**, hasta 6 personas; C1–C3 **Compactas**, hasta 4). La familia compara los dos tipos lado a lado, ve cuál le entra según cuántos son, pide cuna o bañera para el bebé y reserva. La app calcula el precio por temporada y controla que la cuna y la bañera (que son pocas) no se entreguen de más. La dueña gestiona las reservas desde `/admin`.
 
-- **Previsualización:** https://reservascabanas-dev-temporal-link-preview-lb8faoug.webapp-project.com/
-- **Reservar:** `/` · **Mi reserva** (código + celular): `/mi-reserva` · **Panel de la dueña:** `/admin`
+- **Stack:** React 19 + Vite + Tailwind CSS 4 + React Router. Sin servidor ni base de datos: **los datos se guardan en `localStorage`**.
+- **Previsualización:** _pendiente — pegá acá la URL cuando publiques la app (ver «Publicar»)._
+- **Pantallas:** reservar `/` · consultar con código y celular `/mi-reserva` · panel de la dueña `/admin`.
 
-Todos los datos son de ejemplo (ver más abajo) y no hay cobros en la app: la reserva queda *Pendiente* hasta que la dueña confirma el pago.
+> **Importante:** como los datos viven en `localStorage`, **solo se ven en el mismo navegador** (y en el mismo dispositivo) donde se hicieron. Una familia que reserva desde su celular no aparece en el panel abierto en otra computadora. Es lo que pide el encargo; para compartir reservas entre dispositivos haría falta un servidor.
+
+Todos los datos son de ejemplo y no hay cobros en la app.
 
 ## Cómo correrlo
 
-Necesitás Node 22 (`.nvmrc`).
+Necesitás Node 20 o más (`.nvmrc` sugiere 22).
 
 ```bash
 npm install
 npm run dev        # http://localhost:3100
 ```
 
-`npm run dev` crea y migra solo la base local (SQLite); las 6 cabañas se cargan en la migración. Para migrar a mano: `npm run db:migrate`.
+Otros comandos:
 
-Otros comandos útiles: `npm run build` (compila), `npm run check-types-errors` (tipos).
+```bash
+npm test           # pruebas de las reglas de negocio (criterios 1 a 7)
+npm run build      # revisa los tipos y genera la carpeta dist/
+npm run preview    # sirve dist/ en http://localhost:4173
+```
 
 ## Cómo probarlo en 2 minutos
 
-1. En `/` elegí fechas y cuántos viajan. Una familia de 5 solo puede elegir la Familiar (la Compacta aparece deshabilitada con el motivo); un bebé de hasta 2 años no cuenta como plaza.
+1. En `/` elegí fechas y cuántos viajan. Una familia de 5 solo puede elegir la Familiar (la Compacta aparece deshabilitada con el motivo). Un bebé de hasta 2 años no cuenta como plaza.
 2. Probá 3 noches en enero: se rechaza porque el mínimo de verano es 4.
 3. Sumá un bebé y pedí cuna en dos reservas con las mismas fechas: para la tercera, la cuna aparece agotada.
 4. Con el código y el celular de una reserva, entrá a `/mi-reserva`: ahí se ve el estado y se cancela (hasta 72 h antes de llegar). Al cancelar vuelven la cabaña y la cuna a todas las noches de la estadía.
-5. Entrá a `/admin` con la clave para confirmar o cancelar reservas.
+5. Entrá a `/admin` con la clave, tocá «Cargar reservas de ejemplo» y probá confirmar y cancelar.
 
 ## Qué es dato de ejemplo
 
@@ -36,33 +43,50 @@ Todo lo siguiente es inventado y se cambia sin tocar la lógica:
 | --- | --- |
 | Tarifas, temporadas y mínimos de noches | `src/lib/cabanas.ts` |
 | Capacidad y descripción de cada tipo | `src/lib/cabanas.ts` (`TIPOS`) |
+| Las seis unidades F1–F3 y C1–C3 | `src/lib/cabanas.ts` (`UNIDADES`) |
 | Stock de cuna y bañera (2 y 2) | `src/lib/cabanas.ts` (`EXTRAS_TOTAL`) |
-| Horarios de ingreso (13:00) y salida (10:00), horas de cancelación (72) | `src/lib/cabanas.ts` |
+| Horarios (ingreso 13:00, salida 10:00) y horas de cancelación (72) | `src/lib/cabanas.ts` |
 | Alias de pago `cabanas.sierra.pago` | `src/lib/cabanas.ts` (`ALIAS_PAGO`) |
-| Unidades F1–F3 y C1–C3 | `drizzle/0003_unidades_iniciales.sql` |
+| Nombre del negocio y enlaces | `src/lib/config.ts` |
 | Clave del panel `sierra2026` | ver la sección siguiente |
-| 8 reservas de prueba con códigos `CS-EJ…` y celulares `1155550101` a `1155550108` (nombres inventados) | `scripts/seed.ts` |
+| 8 reservas de ejemplo (nombres inventados, códigos `CS-EJ…`, celulares `1155550101` a `1155550108`) | `src/lib/servicio.ts` (`reservasDeEjemplo`) |
 
-Las reservas de prueba son opcionales y se pueden cancelar o borrar. Se cargan con `TOTALUM_ENV=dev npx tsx scripts/seed.ts` contra la base de desarrollo del proyecto en Totalum (necesita la clave del proyecto); en una instalación local sin esa clave el script no puede conectarse, y alcanza con crear reservas desde la web.
+Las reservas de ejemplo **no se cargan solas**: aparecen cuando tocás «Cargar reservas de ejemplo» en `/admin`, con fechas a partir de hoy. «Borrar todo» vacía las reservas guardadas en ese navegador.
 
 ## Cómo cambiar la clave del panel
 
-La clave de ejemplo es `sierra2026`. **Cambiala antes de usar la app con datos reales**: está escrita en este README.
+La clave de ejemplo es `sierra2026`.
 
-1. Definí la variable de entorno `PANEL_CLAVE` con la clave nueva (en local, `PANEL_CLAVE=miClave npm run dev`; en el sitio publicado, en las variables de entorno del proyecto).
-2. Si no definís la variable, se usa el valor de reserva que está en `src/lib/panel.ts`; podés editarlo ahí.
+1. Copiá `.env.example` a `.env` y poné tu clave: `VITE_PANEL_CLAVE=miClaveNueva`.
+2. Reiniciá `npm run dev` (o volvé a hacer `npm run build`). La clave se lee al compilar.
+3. En un servicio de publicación, definí la variable `VITE_PANEL_CLAVE` en su configuración antes de construir.
 
-Cambiar la clave cierra las sesiones abiertas del panel. Después de 8 intentos fallidos desde la misma IP, el ingreso se bloquea 15 minutos.
+Si no definís la variable, se usa `sierra2026`; también podés cambiar ese valor en `src/lib/config.ts`.
+
+**Límite de esta clave:** la app no tiene servidor, así que la clave viaja dentro del código que baja el navegador. Ordena el acceso al panel, pero **no es seguridad real**: cualquiera que mire el código puede encontrarla. Para proteger de verdad las reservas haría falta un servidor con login.
 
 ## Reglas de negocio
 
 - **Tipo, no unidad:** el huésped elige Familiar o Compacta; la app asigna la primera unidad de ese tipo libre todas las noches. Una estadía nunca se reparte entre dos unidades.
-- **Capacidad:** adultos + chicos no pueden superar la capacidad del tipo. Los bebés de hasta 2 años se cargan aparte y hacen que se ofrezcan cuna y bañera.
-- **Cupo:** cada unidad tiene cupo 1 por noche. Una estadía ocupa desde la noche de llegada hasta la anterior a la salida (se puede llegar el día que otro se va). Las fechas se liberan solas al pasar.
+- **Capacidad:** adultos + chicos no pueden superar la capacidad del tipo. Los bebés de hasta 2 años se cargan aparte, no cuentan como plaza y hacen que se ofrezcan cuna y bañera.
+- **Cupo:** cada unidad tiene cupo 1 por noche. Una estadía ocupa desde la noche de llegada hasta la anterior a la salida (se puede llegar el día que otro se va). Las fechas se liberan solas al pasar, porque todo se calcula con la fecha de hoy.
 - **Temporadas:** cada noche se cobra con la tarifa de su fecha; el mínimo de noches es el de la temporada de llegada.
-- **Extras:** cuna y bañera son gratis y se controlan por noche (máximo uno de cada tipo por cabaña). Con cero disponibles en alguna noche de la estadía, aparecen agotadas. La reserva los toma en la misma operación que la unidad, así que dos pedidos a la vez no pueden llevarse el último.
-- **Estados:** *Pendiente* al enviar, *Confirmada* desde `/admin`, *Cancelada*. Las dos primeras ocupan cupo. Cancelar libera el lugar en el momento.
+- **Extras:** cuna y bañera son gratis y se controlan por noche (máximo uno de cada tipo por cabaña). Si en alguna noche de la estadía ya no queda ninguno, aparece «agotada para estas fechas». Cancelar la reserva los devuelve.
+- **Estados:** *Pendiente* al enviar, *Confirmada* desde `/admin` y *Cancelada*. Las dos primeras ocupan cupo. La cancelación desde «Mi reserva» es posible hasta 72 horas antes de llegar y libera el lugar en el momento; la dueña puede cancelar siempre desde el panel.
+- **Sin cuentas:** la reserva se consulta con el código y el celular; si alguno de los dos no coincide, no se muestra nada.
+- **Dos pestañas a la vez:** reservar, cancelar y confirmar leen y escriben dentro de un bloqueo del navegador (Web Locks), así dos pestañas no se llevan la misma noche ni el último extra. Si el navegador no permite `localStorage` (modo privado, por ejemplo), la app funciona igual pero solo mientras la pestaña esté abierta.
 
-## Nota sobre el almacenamiento
+## Publicar
 
-El encargo original sugería `localStorage`. Acá las reservas se guardan en una base de datos compartida (SQLite sobre Drizzle), para que la dueña y las familias vean lo mismo desde cualquier dispositivo. No hay cuentas de usuario: la familia consulta con código + celular, y la dueña entra con la clave del panel.
+Es un sitio estático: `npm run build` genera `dist/` y se sirve en cualquier hosting estático. Como usa rutas como `/mi-reserva` y `/admin`, el hosting tiene que devolver `index.html` para cualquier ruta (en Netlify, Vercel y Cloudflare Pages se activa con una regla de «SPA fallback»). Después de publicar, pegá la URL arriba, en «Previsualización».
+
+## Estructura
+
+```
+src/lib/cabanas.ts      reglas puras: tipos, temporadas, tarifas, fechas, 72 h
+src/lib/servicio.ts     comparar tipos, reservar, Mi reserva, cancelar, panel, datos de ejemplo
+src/lib/store.ts        localStorage (con respaldo en memoria) y sesión del panel
+src/lib/servicio.test.ts  pruebas de los criterios de aceptación
+src/pages/              Inicio, Mi reserva, Admin
+src/components/         reservador, consulta, panel, encabezado y pie
+```

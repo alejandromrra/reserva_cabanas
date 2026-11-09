@@ -1,9 +1,8 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 
-import { hasShell, site } from '@/lib/site';
+import { site } from '@/lib/config';
 
 export function SiteFooter() {
-  if (!hasShell()) return null;
   return (
     <footer className="bg-brand text-sierra-50">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-12">
@@ -23,7 +22,7 @@ export function SiteFooter() {
         </dl>
         <nav aria-label="Pie" className="flex flex-col gap-1 text-sm font-medium md:col-span-3">
           {site.nav.map((l) => (
-            <Link className="w-fit rounded-sm py-1 text-white underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-accent" href={l.href} key={l.href}>
+            <Link className="w-fit rounded-sm py-1 text-white underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-accent" key={l.href} to={l.href}>
               {l.label}
             </Link>
           ))}
@@ -34,7 +33,7 @@ export function SiteFooter() {
           <p>
             © {new Date().getFullYear()} {site.name}
           </p>
-          <Link className="rounded-sm text-sierra-200 underline-offset-4 hover:text-white hover:underline focus-visible:ring-2 focus-visible:ring-accent" href="/admin">
+          <Link className="rounded-sm text-sierra-200 underline-offset-4 hover:text-white hover:underline focus-visible:ring-2 focus-visible:ring-accent" to="/admin">
             Panel
           </Link>
         </div>

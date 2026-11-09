@@ -1,13 +1,8 @@
-'use client';
-
 import { useState } from 'react';
 
-import { cancelarMiReserva, verMiReserva } from '@/app/actions';
 import { Aviso, botonPeligro, botonPrimario, botonSecundario, campo, EstadoBadge, etiqueta } from '@/components/estilos';
 import { fechaLegible, pesos, plural } from '@/components/formato';
-
-type Ver = Awaited<ReturnType<typeof verMiReserva>>;
-type Reserva = Extract<Ver, { ok: true }>['reserva'];
+import { cancelarMiReserva, type VistaReserva as Reserva, verMiReserva } from '@/lib/servicio';
 
 export function ConsultaReserva() {
   const [codigo, setCodigo] = useState('');
@@ -26,7 +21,7 @@ export function ConsultaReserva() {
     setErrorCancelar(null);
     setConfirmando(false);
     try {
-      const r = await verMiReserva(codigo, celular);
+      const r = verMiReserva(codigo, celular);
       if (r.ok) setReserva(r.reserva);
       else {
         setReserva(null);
