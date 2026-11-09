@@ -1,8 +1,37 @@
-// Reglas del complejo: tipos, temporadas, tarifas y fechas. Sin acceso a la base: funciones puras.
+// Reglas del complejo: tipos, temporadas, tarifas y fechas. Todo dato de ejemplo vive en este archivo. Funciones puras.
 export type Tipo = 'Familiar' | 'Compacta';
 export const TIPOS: Record<Tipo, { cap: number; detalle: string }> = {
   Familiar: { cap: 6, detalle: '2 dormitorios, living, cocina, lavadero y baño' },
   Compacta: { cap: 4, detalle: 'Dormitorio matrimonial, 2 camas en el living, cocina y baño' },
+};
+export type Estado = 'Pendiente' | 'Confirmada' | 'Cancelada';
+/** Las seis cabañas del complejo (dato de ejemplo): F1–F3 Familiares, C1–C3 Compactas. */
+export const UNIDADES: { codigo: string; tipo: Tipo }[] = [
+  { codigo: 'F1', tipo: 'Familiar' },
+  { codigo: 'F2', tipo: 'Familiar' },
+  { codigo: 'F3', tipo: 'Familiar' },
+  { codigo: 'C1', tipo: 'Compacta' },
+  { codigo: 'C2', tipo: 'Compacta' },
+  { codigo: 'C3', tipo: 'Compacta' },
+];
+/** Una reserva guardada. Fechas 'AAAA-MM-DD'; las noches ocupadas van de llegada (incluida) a salida (excluida). */
+export type Reserva = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  celular: string; // solo dígitos
+  tipo: Tipo;
+  unidad: string; // 'F1'…'C3'
+  llegada: string;
+  salida: string;
+  adultos: number;
+  chicos: number;
+  bebes: number;
+  cuna: boolean;
+  banera: boolean;
+  precio: number;
+  estado: Estado;
+  creadaEn: number;
 };
 export const EN_COMUN = 'Cochera, galería y parrilla';
 export const EXTRAS_TOTAL = { cuna: 2, banera: 2 };

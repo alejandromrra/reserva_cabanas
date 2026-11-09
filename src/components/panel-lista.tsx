@@ -1,21 +1,16 @@
-'use client';
+import { useState } from 'react';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
-
-import { cambiarEstado, listarReservas, salirPanel } from '@/app/actions';
 import { Aviso, botonPeligro, botonPrimario, botonSecundario, EstadoBadge } from '@/components/estilos';
-import { fechaLegible, pesos, plural, unidadCorta } from '@/components/formato';
-
-type Fila = NonNullable<Awaited<ReturnType<typeof listarReservas>>>[number];
+import { fechaLegible, pesos, plural } from '@/components/formato';
+import type { Reserva as Fila } from '@/lib/cabanas';
+import { borrarReservas, cambiarEstado, cargarEjemplo } from '@/lib/servicio';
+import { abrirPanel } from '@/lib/store';
 
 const chico = 'h-9 px-3 text-sm';
 
 export function PanelLista({ filas }: { filas: Fila[] }) {
-  const router = useRouter();
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [, iniciar] = useTransition();
   const pendientes = filas.filter((f) => f.estado === 'Pendiente').length;
 
   async function cambiar(f: Fila, estado: 'Confirmada' | 'Cancelada') {
@@ -24,17 +19,16 @@ export function PanelLista({ filas }: { filas: Fila[] }) {
     setError(null);
     try {
       const r = await cambiarEstado(f.id, estado);
-      if (!r.ok) setError(r.error ?? 'No se pudo cambiar el estado.');
-      else iniciar(() => router.refresh());
+      if (!r.ok) setError(r.error);
     } catch {
       setError('No se pudo cambiar el estado. Probá de nuevo.');
     }
     setOcupado(null);
   }
 
-  async function salir() {
-    await salirPanel();
-    router.refresh();
+  async function vaciar() {
+    if (!window.confirm('¿Borrar todas las reservas guardadas en este navegador? No se puede deshacer.')) return;
+    await borrarReservas();
   }
 
   const acciones = (f: Fila) => (
@@ -62,7 +56,11 @@ export function PanelLista({ filas }: { filas: Fila[] }) {
             {pendientes > 0 ? ` · ${plural(pendientes, 'pendiente', 'pendientes')} de confirmar` : ''}
           </p>
         </div>
-        <button className={botonSecundario} onClick={salir} type="button">Salir</button>
+        <div className="flex flex-wrap gap-2">
+          <button className={botonSecundario} onClick={() => void cargarEjemplo()} type="button">Cargar reservas de ejemplo</button>
+          {filas.length > 0 && <button className={botonSecundario} onClick={() => void vaciar()} type="button">Borrar todo</button>}
+          <button className={botonSecundario} onClick={() => { abrirPanel(false); }} type="button">Salir</button>
+        </div>
       </div>
 
       {error && <div className="mt-4"><Aviso>{error}</Aviso></div>}
@@ -70,7 +68,7 @@ export function PanelLista({ filas }: { filas: Fila[] }) {
       {filas.length === 0 ? (
         <div className="mt-8 border border-stone-900 bg-white p-8">
           <p className="font-display text-2xl font-bold">Todavía no hay reservas</p>
-          <p className="mt-1 text-base text-stone-800">Cuando alguien reserve desde la página, aparece acá para confirmarla.</p>
+          <p className="mt-1 text-base text-stone-800">Cuando alguien reserve desde este navegador, aparece acá para confirmarla. Para probar el panel, usá «Cargar reservas de ejemplo».</p>
         </div>
       ) : (
         <div className="mt-8 border border-stone-900 bg-white">
@@ -97,7 +95,7 @@ export function PanelLista({ filas }: { filas: Fila[] }) {
                       <p className="break-words font-medium">{f.nombre}</p>
                       <p className="break-words text-xs text-stone-700">{f.celular}</p>
                       <div className="mt-1 space-y-0.5 break-words text-xs text-stone-700 sm:hidden">
-                        <p>{f.tipo} {unidadCorta(f.unidadId)} · {pesos(f.precio)}</p>
+                        <p>{f.tipo} {f.unidad} · {pesos(f.precio)}</p>
                         <p>{fechaLegible(f.llegada)} a {fechaLegible(f.salida)}</p>
                         <p>{personas}</p>
                         {extras && <p>Con {extras}</p>}
@@ -109,12 +107,12 @@ export function PanelLista({ filas }: { filas: Fila[] }) {
                     </td>
                     <td className="hidden px-3 py-3 md:table-cell">
                       <p className="font-medium">{f.tipo}</p>
-                      <p className="text-xs text-stone-700">Unidad {unidadCorta(f.unidadId)}</p>
+                      <p className="text-xs text-stone-700">Unidad {f.unidad}</p>
                     </td>
                     <td className="hidden whitespace-nowrap px-3 py-3 sm:table-cell">
                       <p>{fechaLegible(f.llegada)}</p>
                       <p className="text-stone-700">{fechaLegible(f.salida)}</p>
-                      <p className="mt-1 text-xs text-stone-700 md:hidden">{f.tipo} {unidadCorta(f.unidadId)}</p>
+                      <p className="mt-1 text-xs text-stone-700 md:hidden">{f.tipo} {f.unidad}</p>
                     </td>
                     <td className="hidden px-3 py-3 text-right text-xs lg:table-cell">
                       <p>{personas}</p>

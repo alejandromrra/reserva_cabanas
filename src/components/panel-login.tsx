@@ -1,44 +1,17 @@
-'use client';
+import { useState } from 'react';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-
-import { entrarPanel } from '@/app/actions';
 import { Aviso, botonPrimario, campo, etiqueta } from '@/components/estilos';
-
-// Nunca dejar el botón en «Entrando…» para siempre: si la respuesta no llega, se corta y se avisa.
-const conTiempo = <T,>(p: Promise<T>, ms: number) =>
-  Promise.race([p, new Promise<never>((_, rechazar) => setTimeout(() => { rechazar(new Error('tiempo agotado')); }, ms))]);
+import { PANEL_CLAVE } from '@/lib/config';
+import { abrirPanel } from '@/lib/store';
 
 export function PanelLogin() {
-  const router = useRouter();
   const [clave, setClave] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(false);
-  const espera = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => { clearTimeout(espera.current); }, []);
 
-  async function entrar(e: React.FormEvent) {
+  function entrar(e: React.FormEvent) {
     e.preventDefault();
-    setCargando(true);
-    setError(null);
-    try {
-      const r = await conTiempo(entrarPanel(clave), 20_000);
-      if (r.ok) {
-        // Al guardar la cookie la página se actualiza sola y este formulario desaparece. Si a los 3 segundos
-        // seguimos acá, el navegador no guardó la sesión (por ejemplo, dentro de un marco con cookies de terceros bloqueadas).
-        router.refresh();
-        espera.current = setTimeout(() => {
-          setError('La clave es correcta, pero el navegador no guardó la sesión. Abrí esta página en su propia pestaña o permití las cookies del sitio.');
-          setCargando(false);
-        }, 3000);
-        return;
-      }
-      setError(r.error ?? 'No pudimos entrar.');
-    } catch {
-      setError('No pudimos entrar. Probá de nuevo en unos segundos.');
-    }
-    setCargando(false);
+    if (clave.trim() === PANEL_CLAVE) abrirPanel(true);
+    else setError('Clave incorrecta.');
   }
 
   return (
@@ -49,11 +22,18 @@ export function PanelLogin() {
       </div>
       <form className="border border-stone-900 bg-white p-4 sm:p-6 md:col-span-5 md:col-start-8" onSubmit={entrar}>
         <label className={etiqueta} htmlFor="clave">Clave</label>
-        <input autoComplete="current-password" className={campo} id="clave" name="clave" onChange={(e) => { setClave(e.target.value); }} required type="password" value={clave} />
+        <input
+          autoComplete="current-password"
+          className={campo}
+          id="clave"
+          name="clave"
+          onChange={(e) => { setClave(e.target.value); setError(null); }}
+          required
+          type="password"
+          value={clave}
+        />
         {error && <div className="mt-3"><Aviso>{error}</Aviso></div>}
-        <button className={`${botonPrimario} mt-4`} disabled={cargando} type="submit">
-          {cargando ? 'Entrando…' : 'Entrar'}
-        </button>
+        <button className={`${botonPrimario} mt-4`} type="submit">Entrar</button>
       </form>
     </div>
   );
