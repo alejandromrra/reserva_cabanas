@@ -3,7 +3,7 @@
 Seis cabañas en la sierra (F1–F3 **Familiares**, hasta 6 personas; C1–C3 **Compactas**, hasta 4). La familia compara los dos tipos lado a lado, ve cuál le entra según cuántos son, pide cuna o bañera para el bebé y reserva. La app calcula el precio por temporada y controla que la cuna y la bañera (que son pocas) no se entreguen de más. La dueña gestiona las reservas desde `/admin`.
 
 - **Stack:** React 19 + Vite + Tailwind CSS 4 + React Router. Sin servidor ni base de datos: **los datos se guardan en `localStorage`**.
-- **Previsualización:** _pendiente — pegá acá la URL cuando publiques la app (ver «Publicar»)._
+- **Previsualización:** https://alejandromrra.github.io/reserva_cabanas/ (panel: https://alejandromrra.github.io/reserva_cabanas/admin)
 - **Pantallas:** reservar `/` · consultar con código y celular `/mi-reserva` · panel de la dueña `/admin` (clave de ejemplo: `sierra2026`). Los enlaces del encabezado y del pie («Mi reserva», «Panel») llevan a cada una.
 
 > **Importante:** como los datos viven en `localStorage`, **solo se ven en el mismo navegador** (y en el mismo dispositivo) donde se hicieron. Una familia que reserva desde su celular no aparece en el panel abierto en otra computadora. Es lo que pide el encargo; para compartir reservas entre dispositivos haría falta un servidor.
@@ -114,7 +114,7 @@ Es un sitio estático: `npm run build` genera `dist/` (nunca se publica el códi
 
 **En un dominio propio (producción):** subí el contenido de `dist/` al hosting y activá el «SPA fallback», es decir, que cualquier ruta devuelva `index.html` (en Netlify, Vercel y Cloudflare Pages es una regla de redirección; en Nginx, `try_files $uri /index.html;`). No hace falta tocar nada más: la base por defecto es `/`.
 
-**GitHub Pages (previsualización):** el workflow `.github/workflows/deploy.yml` corre las pruebas, construye con la base del repositorio, agrega el `404.html` y publica en cada push a `main`. Solo hay que poner Settings → Pages → Source en **GitHub Actions**. La URL queda `https://<usuario>.github.io/reserva_cabanas/`; pegala arriba, en «Previsualización».
+**GitHub Pages (previsualización):** el workflow `.github/workflows/deploy.yml` corre las pruebas, construye con la base del repositorio, agrega el `404.html` y publica en cada push a `main`. Solo hay que poner Settings → Pages → Source en **GitHub Actions**. La URL queda `https://<usuario>.github.io/reserva_cabanas/` (la de este proyecto está arriba, en «Previsualización»).
 
 Para cambiar la clave del panel en ese despliegue, definí `VITE_PANEL_CLAVE` como variable del repositorio y pasala en el paso `npm run build` del workflow.
 
