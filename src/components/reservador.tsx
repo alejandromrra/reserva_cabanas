@@ -4,12 +4,17 @@ import { Link } from 'react-router-dom';
 import { fechaLegible, hoyArgentina, pesos, plural, sumarDias } from '@/components/formato';
 import { Glifo, Sierra } from '@/components/ilustraciones';
 import { Aviso, botonPrimario, botonSecundario, campo, contenedor, etiqueta } from '@/components/estilos';
-import { EN_COMUN, type Tipo } from '@/lib/cabanas';
+import { crearIcs, descargarIcs, enlaceWhatsapp, textoWhatsapp } from '@/lib/calendario';
+import { desglose, EN_COMUN, type Tipo } from '@/lib/cabanas';
+import { site } from '@/lib/config';
 import { comparar, type Comparacion, reservar } from '@/lib/servicio';
 import { useReservas } from '@/lib/store';
 
 type TipoFila = Comparacion['tipos'][number];
-type Hecha = { codigo: string; alias: string; precio: number; noches: number; tipo: Tipo; llegada: string; salida: string };
+type Hecha = {
+  codigo: string; alias: string; precio: number; noches: number; tipo: Tipo; llegada: string; salida: string;
+  adultos: number; chicos: number; bebes: number; cuna: boolean; banera: boolean;
+};
 
 const opciones = (desde: number, hasta: number) => Array.from({ length: hasta - desde + 1 }, (_, i) => desde + i);
 
@@ -113,7 +118,7 @@ export function Reservador() {
     try {
       const r = await reservar({ llegada, salida, adultos, chicos, bebes, tipo: elegida.tipo, nombre, celular, cuna, banera });
       if (r.ok) {
-        setHecha({ codigo: r.codigo, alias: r.alias, precio: r.precio, noches: r.noches, tipo: elegida.tipo, llegada, salida });
+        setHecha({ codigo: r.codigo, alias: r.alias, precio: r.precio, noches: r.noches, tipo: elegida.tipo, llegada, salida, adultos, chicos, bebes, cuna, banera });
         setAbierto(false);
         window.scrollTo({ top: 0 });
       } else {
@@ -149,7 +154,7 @@ export function Reservador() {
               ¡Listo! Tu cabaña quedó anotada.
             </h1>
             <p className="mt-3 text-sm font-medium text-stone-800">Tu código de reserva</p>
-            <p className="mt-1 break-all font-display text-6xl font-bold leading-none tracking-wider text-brand sm:text-8xl" data-testid="codigo">
+            <p className="mt-1 break-all font-display text-5xl font-bold leading-none tracking-wider text-brand sm:text-8xl" data-testid="codigo">
               {hecha.codigo}
             </p>
             <p className="mt-6 max-w-md rounded-sm bg-accent px-4 py-3 text-base font-semibold leading-snug">
@@ -190,10 +195,44 @@ export function Reservador() {
                   <dd className="font-semibold">{fechaLegible(hecha.salida)}</dd>
                 </div>
                 <div className="col-span-2">
+                  <dt className="text-stone-700">Desglose por temporada</dt>
+                  <dd>
+                    <ul className="mt-1 divide-y divide-stone-300 border-y border-stone-300" data-testid="desglose">
+                      {desglose(hecha.tipo, hecha.llegada, hecha.salida).map((f) => (
+                        <li className="flex flex-col gap-0.5 py-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3" key={f.temporada}>
+                          <span className="font-semibold">{f.temporada}</span>
+                          <span className="tabular-nums text-stone-800">
+                            {plural(f.noches, 'noche', 'noches')} × {pesos(f.tarifa)} = <strong>{pesos(f.subtotal)}</strong>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+                <div className="col-span-2">
                   <dt className="text-stone-700">Total</dt>
                   <dd className="font-display text-4xl font-bold tabular-nums">{pesos(hecha.precio)}</dd>
                 </div>
               </dl>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <a
+                className={botonPrimario}
+                data-testid="whatsapp"
+                href={enlaceWhatsapp(textoWhatsapp(hecha, site.name, hecha.alias))}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Compartir por WhatsApp
+              </a>
+              <button
+                className={`${botonSecundario} h-12`}
+                data-testid="ics"
+                onClick={() => descargarIcs(crearIcs(hecha, site.name), hecha.codigo)}
+                type="button"
+              >
+                Agregar al calendario (.ics)
+              </button>
             </div>
             <button
               className={`${botonSecundario} mt-4`}

@@ -4,7 +4,7 @@ import {
   ALIAS_PAGO, cotizar, EXTRAS_TOTAL, fechaValida, hoyAR, noches, pesos, puedeCancelar, soloDigitos, sumarDias,
   TIPOS, UNIDADES, type Estado, type Reserva, type Tipo,
 } from '@/lib/cabanas';
-import { borrarTodo, conBloqueo, guardar, leer } from '@/lib/store';
+import { borrarTodo, conBloqueo, guardar, hayDatosGuardados, leer, marcarInicializado, yaInicializado } from '@/lib/store';
 
 export type Consulta = { llegada: string; salida: string; adultos: number; chicos: number; bebes: number };
 
@@ -182,7 +182,7 @@ export function cambiarEstado(id: string, estado: 'Confirmada' | 'Cancelada') {
   });
 }
 
-/** Reservas de ejemplo (inventadas), con fechas a partir de hoy para que siempre estén vigentes. */
+/** Reservas de ejemplo (inventadas), con fechas a partir de hoy para que siempre estén vigentes. Son 12. */
 export function reservasDeEjemplo(hoy = hoyAR()): Reserva[] {
   // [codigo, nombre, celular, tipo, unidad, días hasta la llegada, noches, adultos, chicos, bebés, cuna, bañera, estado]
   const base: [string, string, string, Tipo, string, number, number, number, number, number, boolean, boolean, Estado][] = [
@@ -194,6 +194,10 @@ export function reservasDeEjemplo(hoy = hoyAR()): Reserva[] {
     ['CS-EJ5F6', 'Diego Benítez', '1155550106', 'Familiar', 'F1', 40, 7, 2, 3, 1, true, false, 'Confirmada'],
     ['CS-EJ7G8', 'Romina Acosta', '1155550107', 'Compacta', 'C1', 41, 7, 2, 2, 0, false, false, 'Confirmada'],
     ['CS-EJ9H2', 'Nicolás Vega', '1155550108', 'Compacta', 'C3', 60, 5, 2, 1, 2, true, true, 'Pendiente'],
+    ['CS-EJ3J5', 'Sofía Molina', '1155550109', 'Familiar', 'F2', 42, 5, 2, 2, 1, true, true, 'Confirmada'],
+    ['CS-EJ6K7', 'Pablo Herrera', '1155550110', 'Compacta', 'C2', 44, 4, 2, 2, 0, false, false, 'Pendiente'],
+    ['CS-EJ8M2', 'Agustina Ledesma', '1155550111', 'Familiar', 'F3', 2, 2, 2, 1, 0, false, false, 'Confirmada'],
+    ['CS-EJ4N9', 'Gonzalo Aguirre', '1155550112', 'Compacta', 'C3', 12, 3, 2, 1, 1, true, false, 'Cancelada'],
   ];
   return base.map(([codigo, nombre, celular, tipo, unidad, dias, n, adultos, chicos, bebes, cuna, banera, estado], i) => {
     const llegada = sumarDias(hoy, dias);
@@ -206,11 +210,59 @@ export function reservasDeEjemplo(hoy = hoyAR()): Reserva[] {
   });
 }
 
-export function cargarEjemplo() {
+/**
+ * Carga las reservas de ejemplo la primera vez que se abre la app en este navegador.
+ * No hace nada si ya se cargaron antes (así «Borrar todo» no las trae de vuelta) ni si ya había reservas guardadas.
+ */
+export function iniciarDatos() {
+  if (yaInicializado()) return;
+  if (!hayDatosGuardados()) guardar(reservasDeEjemplo());
+  marcarInicializado();
+}
+
+/** «Restaurar datos de ejemplo»: reemplaza todo lo guardado por las 12 reservas de ejemplo, con fechas desde hoy. */
+export function restaurarEjemplo() {
   return conBloqueo(() => {
-    const lista = leer();
-    const codigos = new Set(lista.map((r) => r.codigo));
-    guardar([...lista, ...reservasDeEjemplo().filter((r) => !codigos.has(r.codigo))]);
+    guardar(reservasDeEjemplo());
+    marcarInicializado();
+  });
+}
+
+// ---- Vistas del panel ----
+export type FiltroReservas = { estado: Estado | 'Todos'; desde: string; hasta: string };
+
+/** Filtra por estado y por rango de fechas: quedan las estadías con alguna noche dentro del rango (desde y hasta incluidos). */
+export function filtrarReservas(lista: Reserva[], f: FiltroReservas) {
+  return lista.filter(
+    (r) => (f.estado === 'Todos' || r.estado === f.estado) && (!f.desde || r.salida > f.desde) && (!f.hasta || r.llegada <= f.hasta),
+  );
+}
+
+/** Ocupación por unidad: para cada noche de la ventana, qué reserva activa ocupa cada unidad (o null si está libre). */
+export function ocupacion(lista: Reserva[], desde: string, dias: number) {
+  const act = activas(lista);
+  return Array.from({ length: dias }, (_, i) => {
+    const fecha = sumarDias(desde, i);
+    return {
+      fecha,
+      unidades: UNIDADES.map((u) => ({
+        unidad: u.codigo,
+        reserva: act.find((r) => r.unidad === u.codigo && r.llegada <= fecha && r.salida > fecha) ?? null,
+      })),
+    };
+  });
+}
+
+/** Stock de cuna y bañera por noche: cuántas hay libres y cuántas se usan, con las reservas activas. */
+export function extrasPorDia(lista: Reserva[], desde: string, dias: number) {
+  const act = activas(lista);
+  return Array.from({ length: dias }, (_, i) => {
+    const fecha = sumarDias(desde, i);
+    const dia = (extra: 'cuna' | 'banera') => {
+      const usadas = act.filter((r) => r[extra] && r.llegada <= fecha && r.salida > fecha);
+      return { total: EXTRAS_TOTAL[extra], libres: EXTRAS_TOTAL[extra] - usadas.length, codigos: usadas.map((r) => r.codigo) };
+    };
+    return { fecha, cuna: dia('cuna'), banera: dia('banera') };
   });
 }
 

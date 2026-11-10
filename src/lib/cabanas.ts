@@ -92,6 +92,21 @@ export function cotizar(tipo: Tipo, llegada: string, salida: string) {
   };
 }
 
+/** Desglose del precio: noches agrupadas por temporada (cada noche con la tarifa de su fecha). */
+export function desglose(tipo: Tipo, llegada: string, salida: string) {
+  const filas: { temporada: string; noches: number; tarifa: number; subtotal: number }[] = [];
+  for (const f of noches(llegada, salida)) {
+    const t = temporadaDe(f);
+    const tarifa = tipo === 'Familiar' ? t.familiar : t.compacta;
+    const fila = filas.find((x) => x.temporada === t.nombre);
+    if (fila) {
+      fila.noches += 1;
+      fila.subtotal += tarifa;
+    } else filas.push({ temporada: t.nombre, noches: 1, tarifa, subtotal: tarifa });
+  }
+  return filas;
+}
+
 /** ¿Se puede cancelar desde la web? Hasta 72 h antes de la llegada (13:00, hora argentina). */
 export function puedeCancelar(llegada: string, ahora = Date.now()) {
   const [y, m, d] = llegada.split('-').map(Number);

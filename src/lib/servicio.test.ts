@@ -1,9 +1,11 @@
 // Pruebas de las reglas del encargo (criterios 1–7). Sin navegador: el almacén cae a memoria.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { hoyAR, sumarDias } from '@/lib/cabanas';
+import { crearIcs, enlaceWhatsapp, textoWhatsapp } from '@/lib/calendario';
+import { cotizar, desglose, hoyAR, noches, sumarDias, UNIDADES } from '@/lib/cabanas';
 import {
-  cambiarEstado, cancelarMiReserva, cargarEjemplo, comparar, reservar, reservasDeEjemplo, stockExtra, unidadLibre,
+  cambiarEstado, cancelarMiReserva, comparar, extrasPorDia, filtrarReservas, ocupacion, reservar, reservasDeEjemplo,
+  restaurarEjemplo, stockExtra, unidadLibre,
   verMiReserva,
 } from '@/lib/servicio';
 import { borrarTodo, leer } from '@/lib/store';
@@ -167,15 +169,131 @@ describe('estados y cancelación', () => {
 });
 
 describe('datos de ejemplo', () => {
-  it('son coherentes: sin solapes por unidad, extras dentro del stock y mínimo de noches', async () => {
-    const lista = reservasDeEjemplo();
-    for (const a of lista) for (const b of lista) {
-      if (a.id < b.id && a.unidad === b.unidad && a.estado !== 'Cancelada' && b.estado !== 'Cancelada')
-        expect(a.llegada < b.salida && b.llegada < a.salida).toBe(false);
+  it('son 12 y son coherentes en cualquier fecha del año: sin solapes por unidad, extras dentro del stock, mínimos y capacidad', () => {
+    expect(reservasDeEjemplo()).toHaveLength(12);
+    for (let d = 0; d < 400; d += 3) {
+      const hoy = sumarDias('2026-01-01', d);
+      const lista = reservasDeEjemplo(hoy);
+      expect(new Set(lista.map((r) => r.codigo)).size).toBe(12);
+      for (const a of lista) {
+        expect(a.adultos + a.chicos).toBeLessThanOrEqual(a.tipo === 'Familiar' ? 6 : 4);
+        expect(UNIDADES.find((u) => u.codigo === a.unidad)?.tipo).toBe(a.tipo);
+        expect(noches(a.llegada, a.salida).length).toBeGreaterThanOrEqual(cotizar(a.tipo, a.llegada, a.salida).minimo);
+        if (a.cuna || a.banera) expect(a.bebes).toBeGreaterThan(0);
+        for (const b of lista)
+          if (a.id < b.id && a.unidad === b.unidad && a.estado !== 'Cancelada' && b.estado !== 'Cancelada')
+            expect(a.llegada < b.salida && b.llegada < a.salida, `${hoy}: ${a.codigo} y ${b.codigo}`).toBe(false);
+      }
+      for (const dia of extrasPorDia(lista, hoy, 120)) {
+        expect(dia.cuna.libres).toBeGreaterThanOrEqual(0);
+        expect(dia.banera.libres).toBeGreaterThanOrEqual(0);
+      }
     }
-    await cargarEjemplo();
-    await cargarEjemplo(); // no duplica
-    expect(leer()).toHaveLength(8);
-    expect(stockExtra(leer(), 'cuna', hoyAR(), sumarDias(hoyAR(), 90))).toBeGreaterThanOrEqual(1);
+  });
+  it('tienen de todo para probar: los tres estados, cunas y bañeras, y las dos cabañas', () => {
+    const l = reservasDeEjemplo();
+    for (const e of ['Pendiente', 'Confirmada', 'Cancelada'] as const) expect(l.some((r) => r.estado === e)).toBe(true);
+    expect(l.some((r) => r.cuna)).toBe(true);
+    expect(l.some((r) => r.banera)).toBe(true);
+    expect(new Set(l.map((r) => r.tipo)).size).toBe(2);
+  });
+  it('restaurar reemplaza todo lo guardado por las 12 de ejemplo', async () => {
+    const r = await reservar(pedido(MARZO, 2));
+    expect(r.ok).toBe(true);
+    expect(leer()).toHaveLength(1);
+    await restaurarEjemplo();
+    expect(leer()).toHaveLength(12);
+    expect(leer().some((x) => x.nombre === 'Familia de Prueba')).toBe(false);
+  });
+  it('se cargan solas la primera vez, no vuelven tras «Borrar todo» y no pisan datos existentes', async () => {
+    vi.resetModules();
+    const sv = await import('@/lib/servicio');
+    const st = await import('@/lib/store');
+    sv.iniciarDatos();
+    expect(st.leer()).toHaveLength(12);
+    await sv.borrarReservas();
+    sv.iniciarDatos(); // otra apertura de la app
+    expect(st.leer()).toHaveLength(0);
+
+    vi.resetModules();
+    const sv2 = await import('@/lib/servicio');
+    const st2 = await import('@/lib/store');
+    st2.guardar([reservasDeEjemplo()[0]]); // ya había una reserva guardada
+    sv2.iniciarDatos();
+    expect(st2.leer()).toHaveLength(1);
+  });
+});
+
+describe('desglose por temporada', () => {
+  it('separa las noches de cada temporada y suma lo mismo que el precio', () => {
+    const l = proxima('02-26');
+    const sal = sumarDias(l, 5); // 26, 27, 28/02 (verano) y 01, 02/03 (baja)
+    const d = desglose('Familiar', l, sal);
+    expect(d.map((x) => [x.temporada, x.noches, x.tarifa])).toEqual([['Verano', 3, 150000], ['Baja', 2, 95000]]);
+    expect(d.reduce((a, x) => a + x.subtotal, 0)).toBe(cotizar('Familiar', l, sal).total);
+  });
+  it('una estadía dentro de una sola temporada tiene una sola fila', () => {
+    expect(desglose('Compacta', ENERO, sumarDias(ENERO, 4))).toEqual([{ temporada: 'Verano', noches: 4, tarifa: 110000, subtotal: 440000 }]);
+  });
+});
+
+describe('.ics y WhatsApp', () => {
+  const r = { codigo: 'CS-ABC12', tipo: 'Familiar' as const, llegada: '2027-01-10', salida: '2027-01-14', adultos: 2, chicos: 2, bebes: 1, cuna: true, banera: false, precio: 600000 };
+  it('el .ics tiene llegada 13:00 y salida 10:00 (hora argentina, en UTC) y termina cada línea con CRLF', () => {
+    const ics = crearIcs(r, 'Cabañas del Sendero', new Date('2026-11-10T12:00:00Z'));
+    expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+    expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+    expect(ics).toContain('DTSTART:20270110T160000Z');
+    expect(ics).toContain('DTEND:20270114T130000Z');
+    expect(ics).toContain('UID:CS-ABC12@cabanas-del-sendero');
+    expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+    for (const linea of ics.split('\r\n')) expect(linea.length).toBeLessThanOrEqual(75);
+    expect(ics.replace(/\r\n /g, '')).toContain('Código de reserva: CS-ABC12\\nCabaña Familiar\\, 4 noches');
+  });
+  it('el texto de WhatsApp lleva código, fechas, personas, extras, total y alias, y el enlace lo codifica', () => {
+    const t = textoWhatsapp(r, 'Cabañas del Sendero', 'cabanas.sierra.pago');
+    for (const parte of ['CS-ABC12', '10/01 al 14/01', '4 noches', '2 adultos, 2 chicos, 1 bebé', 'cuna', '$600.000', 'cabanas.sierra.pago']) expect(t).toContain(parte);
+    expect(enlaceWhatsapp(t)).toBe('https://wa.me/?text=' + encodeURIComponent(t));
+  });
+});
+
+describe('panel: filtros, ocupación y extras por día', () => {
+  const base = reservasDeEjemplo();
+  it('filtra por estado', () => {
+    const r = filtrarReservas(base, { estado: 'Cancelada', desde: '', hasta: '' });
+    expect(r.length).toBeGreaterThan(0);
+    expect(r.every((x) => x.estado === 'Cancelada')).toBe(true);
+    expect(filtrarReservas(base, { estado: 'Todos', desde: '', hasta: '' })).toHaveLength(12);
+  });
+  it('filtra por rango: cuentan las estadías con alguna noche dentro (desde y hasta incluidos)', () => {
+    const una = [{ ...base[0], llegada: '2027-03-10', salida: '2027-03-13' }]; // noches 10, 11 y 12
+    const f = (desde: string, hasta: string) => filtrarReservas(una, { estado: 'Todos', desde, hasta }).length;
+    expect(f('2027-03-13', '')).toBe(0); // el 13 se va: esa noche ya no ocupa
+    expect(f('2027-03-12', '')).toBe(1);
+    expect(f('', '2027-03-09')).toBe(0);
+    expect(f('', '2027-03-10')).toBe(1);
+    expect(f('2027-03-11', '2027-03-11')).toBe(1);
+  });
+  it('la ocupación muestra cada reserva activa en su unidad y todas sus noches, y deja libre lo cancelado', () => {
+    const hoy = hoyAR();
+    const grilla = ocupacion(base, hoy, 90);
+    for (const dia of grilla) {
+      const activas = base.filter((r) => r.estado !== 'Cancelada' && r.llegada <= dia.fecha && r.salida > dia.fecha);
+      expect(dia.unidades.filter((u) => u.reserva)).toHaveLength(activas.length);
+      for (const a of activas) expect(dia.unidades.find((u) => u.unidad === a.unidad)?.reserva?.codigo).toBe(a.codigo);
+    }
+    const cancelada = base.find((r) => r.estado === 'Cancelada')!;
+    expect(grilla.find((d) => d.fecha === cancelada.llegada)!.unidades.find((u) => u.unidad === cancelada.unidad)!.reserva).toBeNull();
+  });
+  it('el stock de extras por día coincide con el que usa la reserva (stockExtra) y suma 1 al cancelar', async () => {
+    const hoy = hoyAR();
+    for (const dia of extrasPorDia(base, hoy, 90)) {
+      expect(dia.cuna.libres).toBe(stockExtra(base, 'cuna', dia.fecha, sumarDias(dia.fecha, 1)));
+      expect(dia.banera.libres).toBe(stockExtra(base, 'banera', dia.fecha, sumarDias(dia.fecha, 1)));
+    }
+    const conCuna = base.find((r) => r.cuna && r.estado !== 'Cancelada')!;
+    const antes = extrasPorDia(base, conCuna.llegada, 1)[0].cuna.libres;
+    const despues = extrasPorDia(base.map((r) => (r.id === conCuna.id ? { ...r, estado: 'Cancelada' as const } : r)), conCuna.llegada, 1)[0].cuna.libres;
+    expect(despues).toBe(antes + 1);
   });
 });

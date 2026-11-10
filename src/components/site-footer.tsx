@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 
+import { BotonRestaurar } from '@/components/restaurar';
 import { site } from '@/lib/config';
 
 export function SiteFooter() {
@@ -33,9 +34,12 @@ export function SiteFooter() {
           <p>
             © {new Date().getFullYear()} {site.name}
           </p>
-          <Link className="rounded-sm text-sierra-200 underline-offset-4 hover:text-white hover:underline focus-visible:ring-2 focus-visible:ring-accent" to="/admin">
-            Panel
-          </Link>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <BotonRestaurar className="rounded-sm py-1 text-sierra-200 underline underline-offset-4 hover:text-white focus-visible:ring-2 focus-visible:ring-accent" />
+            <Link className="rounded-sm py-1 text-sierra-200 underline-offset-4 hover:text-white hover:underline focus-visible:ring-2 focus-visible:ring-accent" to="/admin">
+              Panel
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

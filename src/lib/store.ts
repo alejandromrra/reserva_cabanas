@@ -73,6 +73,29 @@ export function guardar(lista: Reserva[]) {
   escribirCrudo(JSON.stringify(lista));
 }
 
+// ---- Datos iniciales: se cargan una sola vez, la primera vez que se abre la app en este navegador ----
+const MARCA = 'cabanas-del-sendero:inicializado:v1';
+let marcaMemoria = false;
+
+/** ¿Ya se cargaron los datos de ejemplo alguna vez? (así «Borrar todo» no los vuelve a cargar solo). */
+export function yaInicializado(): boolean {
+  try {
+    return globalThis.localStorage.getItem(MARCA) === '1';
+  } catch {
+    return marcaMemoria;
+  }
+}
+export function marcarInicializado() {
+  marcaMemoria = true;
+  try {
+    globalThis.localStorage.setItem(MARCA, '1');
+  } catch {
+    /* queda en memoria */
+  }
+}
+/** ¿Hay algo guardado? (sin leer: distingue «nunca se guardó» de «lista vacía»). */
+export const hayDatosGuardados = () => leerCrudo() !== null;
+
 export function borrarTodo() {
   guardar([]);
 }
