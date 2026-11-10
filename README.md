@@ -4,11 +4,23 @@ Seis cabañas en la sierra (F1–F3 **Familiares**, hasta 6 personas; C1–C3 **
 
 - **Stack:** React 19 + Vite + Tailwind CSS 4 + React Router. Sin servidor ni base de datos: **los datos se guardan en `localStorage`**.
 - **Previsualización:** _pendiente — pegá acá la URL cuando publiques la app (ver «Publicar»)._
-- **Pantallas:** reservar `/` · consultar con código y celular `#/mi-reserva` · panel de la dueña `#/admin`.
+- **Pantallas:** reservar `/` · consultar con código y celular `/#/mi-reserva` · panel de la dueña `/#/admin` (clave de ejemplo: `sierra2026`). Los enlaces del encabezado y del pie («Mi reserva», «Panel») llevan a cada una.
 
 > **Importante:** como los datos viven en `localStorage`, **solo se ven en el mismo navegador** (y en el mismo dispositivo) donde se hicieron. Una familia que reserva desde su celular no aparece en el panel abierto en otra computadora. Es lo que pide el encargo; para compartir reservas entre dispositivos haría falta un servidor.
 
 Todos los datos son de ejemplo y no hay cobros en la app. Al abrirla por primera vez ya trae 12 reservas de ejemplo cargadas (ver «Qué es dato de ejemplo»).
+
+## Cómo entrar a cada pantalla (por qué las rutas llevan `#`)
+
+La app usa rutas con `#` (`HashRouter`) en vez de `/admin` a secas. Es una decisión a propósito: GitHub Pages es un hosting de archivos estáticos y, si se abre `/admin` directo o se recarga, busca un archivo que no existe y da 404. Con el `#`, la parte de la ruta no viaja al servidor, así que siempre carga la app y funciona al recargar, sin configurar redirecciones.
+
+| Pantalla | En la previsualización | En local (`npm run dev`) |
+| --- | --- | --- |
+| Reservar | `https://<usuario>.github.io/reserva_cabanas/` | `http://localhost:3100/` |
+| Mi reserva | `…/reserva_cabanas/#/mi-reserva` | `http://localhost:3100/#/mi-reserva` |
+| Panel de la dueña | `…/reserva_cabanas/#/admin` | `http://localhost:3100/#/admin` |
+
+Si se prefiere sin `#`, hay que volver a `BrowserRouter` y que el hosting devuelva `index.html` para cualquier ruta.
 
 ## Cómo correrlo
 
