@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
 import { SiteFooter } from '@/components/site-footer';
@@ -6,6 +6,9 @@ import { SiteHeader } from '@/components/site-header';
 import Admin from '@/pages/Admin';
 import Inicio from '@/pages/Inicio';
 import MiReserva from '@/pages/MiReserva';
+
+// Carpeta donde se publica la app: «/» en un dominio propio, «/reserva_cabanas» en GitHub Pages (ver vite.config.ts).
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 
 function AlInicio() {
   const { pathname } = useLocation();
@@ -15,7 +18,7 @@ function AlInicio() {
 
 export default function App() {
   return (
-    <HashRouter>
+    <BrowserRouter basename={BASE}>
       <AlInicio />
       <SiteHeader />
       <div className="flex-1">
@@ -27,6 +30,6 @@ export default function App() {
         </Routes>
       </div>
       <SiteFooter />
-    </HashRouter>
+    </BrowserRouter>
   );
 }

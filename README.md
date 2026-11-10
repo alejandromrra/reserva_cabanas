@@ -4,23 +4,27 @@ Seis cabañas en la sierra (F1–F3 **Familiares**, hasta 6 personas; C1–C3 **
 
 - **Stack:** React 19 + Vite + Tailwind CSS 4 + React Router. Sin servidor ni base de datos: **los datos se guardan en `localStorage`**.
 - **Previsualización:** _pendiente — pegá acá la URL cuando publiques la app (ver «Publicar»)._
-- **Pantallas:** reservar `/` · consultar con código y celular `/#/mi-reserva` · panel de la dueña `/#/admin` (clave de ejemplo: `sierra2026`). Los enlaces del encabezado y del pie («Mi reserva», «Panel») llevan a cada una.
+- **Pantallas:** reservar `/` · consultar con código y celular `/mi-reserva` · panel de la dueña `/admin` (clave de ejemplo: `sierra2026`). Los enlaces del encabezado y del pie («Mi reserva», «Panel») llevan a cada una.
 
 > **Importante:** como los datos viven en `localStorage`, **solo se ven en el mismo navegador** (y en el mismo dispositivo) donde se hicieron. Una familia que reserva desde su celular no aparece en el panel abierto en otra computadora. Es lo que pide el encargo; para compartir reservas entre dispositivos haría falta un servidor.
 
 Todos los datos son de ejemplo y no hay cobros en la app. Al abrirla por primera vez ya trae 12 reservas de ejemplo cargadas (ver «Qué es dato de ejemplo»).
 
-## Cómo entrar a cada pantalla (por qué las rutas llevan `#`)
+## Pantallas y rutas
 
-La app usa rutas con `#` (`HashRouter`) en vez de `/admin` a secas. Es una decisión a propósito: GitHub Pages es un hosting de archivos estáticos y, si se abre `/admin` directo o se recarga, busca un archivo que no existe y da 404. Con el `#`, la parte de la ruta no viaja al servidor, así que siempre carga la app y funciona al recargar, sin configurar redirecciones.
+Las rutas son las de siempre (`/`, `/mi-reserva`, `/admin`), sin `#`:
 
-| Pantalla | En la previsualización | En local (`npm run dev`) |
+| Pantalla | Ruta | En local (`npm run dev`) |
 | --- | --- | --- |
-| Reservar | `https://<usuario>.github.io/reserva_cabanas/` | `http://localhost:3100/` |
-| Mi reserva | `…/reserva_cabanas/#/mi-reserva` | `http://localhost:3100/#/mi-reserva` |
-| Panel de la dueña | `…/reserva_cabanas/#/admin` | `http://localhost:3100/#/admin` |
+| Reservar | `/` | `http://localhost:3100/` |
+| Mi reserva | `/mi-reserva` | `http://localhost:3100/mi-reserva` |
+| Panel de la dueña | `/admin` | `http://localhost:3100/admin` |
 
-Si se prefiere sin `#`, hay que volver a `BrowserRouter` y que el hosting devuelva `index.html` para cualquier ruta.
+En la previsualización de GitHub Pages van detrás del nombre del repositorio: `https://<usuario>.github.io/reserva_cabanas/admin`.
+
+**Carpeta de publicación (`VITE_BASE`).** Por defecto la app se publica en la raíz de un dominio (`/`), que es lo normal en producción. GitHub Pages sirve el proyecto en una subcarpeta (`/reserva_cabanas/`), así que su despliegue (`.github/workflows/deploy.yml`) construye con `VITE_BASE=/reserva_cabanas/`. Para otra subcarpeta: `VITE_BASE=/mi-carpeta/ npm run build`.
+
+**Redirección de rutas.** Como la app es de una sola página, el hosting tiene que devolver `index.html` para `/admin` y `/mi-reserva` (si no, recargar esas rutas da 404). Con un dominio propio se activa con la regla de «SPA fallback» del hosting (ver «Publicar»). GitHub Pages no tiene esa regla, por eso el workflow copia `index.html` como `404.html`: Pages lo muestra cuando no encuentra la ruta y la app carga igual.
 
 ## Cómo correrlo
 
@@ -46,7 +50,7 @@ npm run preview    # sirve dist/ en http://localhost:4173
 3. Sumá un bebé y pedí cuna en dos reservas con las mismas fechas: para la tercera, la cuna aparece agotada.
 4. Con el código y el celular de una reserva, entrá a `/mi-reserva`: ahí se ve el estado y se cancela (hasta 72 h antes de llegar). Al cancelar vuelven la cabaña y la cuna a todas las noches de la estadía.
 5. Al terminar de reservar, la pantalla de confirmación ofrece **Compartir por WhatsApp** (mensaje prearmado), **Agregar al calendario (.ics)** y el **desglose del precio por temporada**.
-6. Entrá a `#/admin` con la clave (`sierra2026`). Ahí ya están las 12 reservas de ejemplo: probá confirmar y cancelar, **filtrar** por estado y rango de fechas y mirar la pestaña **Ocupación y extras** (las seis unidades noche por noche y cuántas cunas y bañeras quedan libres cada día).
+6. Entrá a `/admin` con la clave (`sierra2026`). Ahí ya están las 12 reservas de ejemplo: probá confirmar y cancelar, **filtrar** por estado y rango de fechas y mirar la pestaña **Ocupación y extras** (las seis unidades noche por noche y cuántas cunas y bañeras quedan libres cada día).
 
 ## Qué es dato de ejemplo
 
@@ -106,9 +110,11 @@ Si no definís la variable, se usa `sierra2026`; también podés cambiar ese val
 
 ## Publicar
 
-Es un sitio estático: `npm run build` genera `dist/` (nunca se publica el código fuente). Las rutas usan `#` (`/#/mi-reserva`, `/#/admin`) y los archivos se piden con rutas relativas, así que funciona en cualquier hosting y en subcarpetas, sin reglas de redirección.
+Es un sitio estático: `npm run build` genera `dist/` (nunca se publica el código fuente).
 
-**GitHub Pages:** el workflow `.github/workflows/deploy.yml` corre las pruebas, construye y publica en cada push a `main`. Solo hay que poner Settings → Pages → Source en **GitHub Actions**. La URL queda `https://<usuario>.github.io/reserva_cabanas/`; pegala arriba, en «Previsualización».
+**En un dominio propio (producción):** subí el contenido de `dist/` al hosting y activá el «SPA fallback», es decir, que cualquier ruta devuelva `index.html` (en Netlify, Vercel y Cloudflare Pages es una regla de redirección; en Nginx, `try_files $uri /index.html;`). No hace falta tocar nada más: la base por defecto es `/`.
+
+**GitHub Pages (previsualización):** el workflow `.github/workflows/deploy.yml` corre las pruebas, construye con la base del repositorio, agrega el `404.html` y publica en cada push a `main`. Solo hay que poner Settings → Pages → Source en **GitHub Actions**. La URL queda `https://<usuario>.github.io/reserva_cabanas/`; pegala arriba, en «Previsualización».
 
 Para cambiar la clave del panel en ese despliegue, definí `VITE_PANEL_CLAVE` como variable del repositorio y pasala en el paso `npm run build` del workflow.
 
